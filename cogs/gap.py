@@ -13,6 +13,14 @@ class GapCommand(commands.Cog):
         self.bot = bot
         globals()["bot"] = bot
 
+    async def autocompletion_region(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        return [
+            app_commands.Choice(name="GLB", value="GLB"),
+            app_commands.Choice(name="JP", value="JP"),
+        ]
+
     @app_commands.command(
         name="gap",
         description="Show the gap between the player and the player above and below (if any).",
@@ -20,13 +28,18 @@ class GapCommand(commands.Cog):
     @app_commands.describe(
         identifier="The identifier of the player you want to see the gap of.",
         rank="If you wish to search the gap of a player with its rank instead of its name",
+        region="Region to query (GLB or JP).",
     )
-    async def gap(self, ctx, identifier: str = None, rank: str = None):
+    @app_commands.autocomplete(region=autocompletion_region)
+    async def gap(
+        self, ctx, identifier: str = None, rank: str = None, region: str = "GLB"
+    ):
         try:
             await ctx.response.defer()
-            conn = load_db_data()
+            region = (region or "GLB").upper()
+            conn = load_db_data(region)
             discord_users = load_discord_users()
-            update, *_ = time_data()
+            update, *_ = time_data(region=region)
             if update is None:
                 update = datetime.fromisoformat("2005-03-30")
                 update = datetime.combine(update, datetime.min.time())
@@ -41,7 +54,7 @@ class GapCommand(commands.Cog):
                         )
                         return
                 else:
-                    identifier = find_rank(conn, rank)
+                    identifier = find_rank(conn, rank, region=region)
 
             players = find_player(conn, identifier)
             if not players:

@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dokkan Battle Leaderboard - {{ region }} Region</title>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        #updateButton {
+            display: none;
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        .region-indicator {
+            background: {{ 'linear-gradient(45deg, #ff6b35, #f7931e)' if region == 'JP' else 'linear-gradient(45deg, #4285f4, #34a853)' }};
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+        .region-switcher {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .region-switcher a {
+            padding: 4px 12px;
+            border-radius: 20px;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: all 0.3s;
+        }
+        .region-switcher a.active {
+            background: {{ '#ff6b35' if region == 'JP' else '#4285f4' }};
+            color: white;
+        }
+        .region-switcher a:not(.active) {
+            background: #f8f9fa;
+            color: #6c757d;
+        }
+        .region-switcher a:hover:not(.active) {
+            background: #e9ecef;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('leaderboard') }}">
+                Dokkan WT Stats <span class="region-indicator">{{ region }}</span>
+            </a>
+            <div class="navbar-nav">
+                <a class="nav-link active" href="{{ url_for('leaderboard') }}">Leaderboard</a>
+                <a class="nav-link" href="{{ url_for('personal_performance') }}">My Performance</a>
+                <a class="nav-link" href="{{ url_for('older_editions') }}">Older Editions</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-5">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+            <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center gap-3">
+                <div>
+                    <h2 class="mb-0">Top Players Leaderboard</h2>
+                    {% if current_edition %}
+                    <small class="text-muted">Viewing: {{ current_edition.replace('.db', '').replace('_', ' ').title() }}</small>
+                    {% endif %}
+                </div>
+                
+                <!-- Region Switcher -->
+                <div class="region-switcher">
+                    <small class="text-muted">Region:</small>
+                    {% if current_edition %}
+                        <!-- For older editions, use the new region-specific URLs -->
+                        {% set glb_url = url_for('edition_leaderboard_with_region', region='GLB', database=current_edition, type=type, page=page) %}
+                        {% set jp_url = url_for('edition_leaderboard_with_region', region='JP', database=current_edition, type=type, page=page) %}
+                    {% else %}
+                        <!-- For current leaderboard -->
+                        {% set glb_url = url_for('leaderboard', type=type, page=page) %}
+                        {% set jp_url = glb_url + ('&' if '?' in glb_url else '?') + 'region=JP' %}
+                    {% endif %}
+                    
+                    <a href="{{ glb_url }}" class="{{ 'active' if region == 'GLB' else '' }}">GLB</a>
+                    <a href="{{ jp_url }}" class="{{ 'active' if region == 'JP' else '' }}">JP</a>
+                </div>
+            </div>
+
+            <form method="get" id="typeForm" class="d-flex align-items-center mb-2 mb-md-0">
+                {% if current_edition %}
+                <input type="hidden" name="database" value="{{ current_edition }}">
+                {% endif %}
+                {% if region == 'JP' %}
+                <input type="hidden" name="region" value="JP">
+                {% endif %}
+                <label for="typeSelect" class="me-2 mb-0">Leaderboard Type:</label>
+                <select class="form-select" id="typeSelect" name="type" onchange="document.getElementById('typeForm').submit()">
+                    {% for t in leaderboard_types %}
+                        <option value="{{ t }}" {% if t == type %}selected{% endif %}>{{ t.replace('_', ' ').title() }}</option>
+                    {% endfor %}
+                </select>
+            </form>
+
+            {% if not no_tournament %}
+            <div class="position-relative min-width-250">
+                <input type="text" class="form-control" id="playerSearch" placeholder="Search player by name or ID..." autocomplete="off">
+                <div id="searchResults" class="list-group"></div>
+            </div>
+            {% endif %}
+        </div>
+
+        {% if no_tournament %}
+        <div class="alert alert-info text-center">
+            <h4>No Ongoing World Tournament</h4>
+            <p class="mb-0">There is currently no active World Tournament in the {{ region }} region. Check back later for live leaderboards!</p>
+            <p class="mt-2 mb-0">
+                <a href="{{ url_for('older_editions') }}" class="btn btn-outline-primary">View Past Tournaments</a>
+            </p>
+        </div>
+        {% else %}
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th scope="col">#</th>
+                    <th scope="col">Player</th>
+                    <th scope="col">{{ type.replace('_', ' ').title() }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for player in players %}
+                <tr>
+                    <th scope="row">{{ (page-1)*10 + loop.index }}</th>
+                    <td>
+                        {% if current_edition %}
+                            {% if region == 'JP' %}
+                                {% set player_url = url_for('player_detail', main_id=player[0], database=current_edition, region='JP') %}
+                            {% else %}
+                                {% set player_url = url_for('player_detail', main_id=player[0], database=current_edition) %}
+                            {% endif %}
+                        {% else %}
+                            {% if region == 'JP' %}
+                                {% set player_url = url_for('player_detail', main_id=player[0], region='JP') %}
+                            {% else %}
+                                {% set player_url = url_for('player_detail', main_id=player[0]) %}
+                            {% endif %}
+                        {% endif %}
+                        <a href="{{ player_url }}">{{ player[1] }}</a>
+                    </td>
+                    <td>{{ '{:,.0f}'.format(player[2]) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <nav aria-label="Leaderboard pagination">
+            <ul class="pagination">
+                {% if page > 1 %}
+                <li class="page-item">
+                    {% if current_edition %}
+                        {% set prev_url = url_for('edition_leaderboard_with_region', region=region, database=current_edition, page=page-1, type=type) %}
+                    {% else %}
+                        {% set prev_url = url_for('leaderboard', page=page-1, type=type) %}
+                        {% if region == 'JP' %}
+                            {% set prev_url = prev_url + '&region=JP' %}
+                        {% endif %}
+                    {% endif %}
+                    <a class="page-link" href="{{ prev_url }}">Previous</a>
+                </li>
+                {% endif %}
+                <li class="page-item active"><span class="page-link">{{ page }}</span></li>
+                {% if players|length == 10 %}
+                <li class="page-item">
+                    {% if current_edition %}
+                        {% set next_url = url_for('edition_leaderboard_with_region', region=region, database=current_edition, page=page+1, type=type) %}
+                    {% else %}
+                        {% set next_url = url_for('leaderboard', page=page+1, type=type) %}
+                        {% if region == 'JP' %}
+                            {% set next_url = next_url + '&region=JP' %}
+                        {% endif %}
+                    {% endif %}
+                    <a class="page-link" href="{{ next_url }}">Next</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+
+    <!-- Hidden Update Button -->
+    <button id="updateButton" class="btn btn-warning" onclick="window.location.reload();">
+        New Data Available - Click to Refresh
+    </button>
+
+{% if not no_tournament %}
+<script>
+// ================== Player Search ==================
+const searchInput = document.getElementById('playerSearch');
+const resultsDiv = document.getElementById('searchResults');
+const currentEdition = '{{ current_edition }}' || null;
+const region = "{{ region }}";
+let timeout = null;
+
+searchInput.addEventListener('input', function() {
+    clearTimeout(timeout);
+    const query = this.value.trim();
+    if (!query) {
+        resultsDiv.innerHTML = '';
+        return;
+    }
+    timeout = setTimeout(() => {
+        let searchUrl = `/search_player?q=${encodeURIComponent(query)}`;
+        if (currentEdition) {
+            searchUrl += `&database=${encodeURIComponent(currentEdition)}`;
+        }
+        if (region === 'JP') {
+            searchUrl += `&region=JP`;
+        }
+        fetch(searchUrl)
+            .then(r => r.json())
+            .then(data => {
+                resultsDiv.innerHTML = '';
+                if (data.length === 0) return;
+                data.forEach(player => {
+                    const item = document.createElement('a');
+                    item.className = 'list-group-item list-group-item-action';
+                    let text = `${player.name} (ID: ${player.id}`;
+                    if (player.rank !== null && player.rank !== undefined) {
+                        text += `, Rank: ${player.rank}`;
+                    }
+                    text += ")";
+                    item.textContent = text;
+                    
+                    let playerUrl = `/player?main_id=${player.id}`;
+                    if (currentEdition) {
+                        playerUrl += `&database=${encodeURIComponent(currentEdition)}`;
+                    }
+                    if (region === 'JP') {
+                        playerUrl += `&region=JP`;
+                    }
+                    item.href = playerUrl;
+                    resultsDiv.appendChild(item);
+                });
+            });
+    }, 200);
+});
+
+document.addEventListener('click', function(e) {
+    if (!searchInput.contains(e.target) && !resultsDiv.contains(e.target)) {
+        resultsDiv.innerHTML = '';
+    }
+});
+
+// ================== SSE Update Handling (only for current edition) ==================
+{% if not no_tournament and not current_edition %}
+const evtSource = new EventSource('/events');
+const updateBtn = document.getElementById('updateButton');
+
+evtSource.onmessage = function(event) {
+    if (event.data === "update") {
+        updateBtn.style.display = 'block';
+    }
+};
+{% endif %}
+
+</script>
+{% endif %}
+</body>
+</html>
+</body>
+</html>

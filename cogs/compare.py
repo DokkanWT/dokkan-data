@@ -1,4 +1,5 @@
 import os
+import typing
 from datetime import date
 
 import discord
@@ -32,18 +33,52 @@ class CompareCommand(commands.Cog):
         ]
         return choices
 
+    async def autocompletion_editions(
+        self, interaction: discord.Interaction, current: str
+    ) -> typing.List[app_commands.Choice[str]]:
+        choices = [app_commands.Choice(name="BEST", value="BEST")]
+
+        # Get available editions from older_editions/GLB
+        older_editions_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "../older_editions/GLB"
+        )
+        if os.path.exists(older_editions_path):
+            editions = [
+                d
+                for d in os.listdir(older_editions_path)
+                if os.path.isdir(os.path.join(older_editions_path, d))
+            ]
+            editions.sort()
+            for edition in editions:
+                choices.append(
+                    app_commands.Choice(name=f"Edition {edition}", value=edition)
+                )
+
+        return choices
+
     @app_commands.command(name="compare", description="Compare multiple users.")
     @app_commands.describe(
         type="The type of comparison you want to see. Either 'wins', 'points', or 'ranks'.",
         users="The users you want to compare (ex. /compare type:points users:User1 User2).",
         ranks="If you wish to use the ranks to compare so that you don't have to type the names of the players (this will stack on top of the user list so you can use both at the same time)",
+        region="Region to query (GLB or JP).",
+        editions="Space-separated list of edition numbers to include your performance from those editions (optional). Use 'BEST' to include your best edition automatically.",
     )
-    @app_commands.autocomplete(type=autocompletion_type_cmp)
+    @app_commands.autocomplete(
+        type=autocompletion_type_cmp, editions=autocompletion_editions
+    )
     async def compare(
-        self, ctx, type: str = None, users: str = None, ranks: str = None
+        self,
+        ctx,
+        type: typing.Optional[str] = None,
+        users: typing.Optional[str] = None,
+        ranks: typing.Optional[str] = None,
+        region: str = "GLB",
+        editions: typing.Optional[str] = None,
     ):
         try:
             await ctx.response.defer()
+            region = (region or "GLB").upper()
             if type not in [
                 "points_pace",
                 "wins_pace",
@@ -61,16 +96,17 @@ class CompareCommand(commands.Cog):
 
             user_list = users.split(" ") if users is not None else []
             ranks_list = ranks.split(" ") if ranks is not None else []
-            if len(user_list) + len(ranks_list) < 2:
+            editions_list = editions.split(" ") if editions is not None else []
+            if len(user_list) + len(ranks_list) + len(editions_list) < 2:
                 await ctx.followup.send("Please provide at least 2 users to compare.")
                 return
 
-            update, start, end, total, left, elapsed = time_data()
+            update, start, end, total, left, elapsed = time_data(region=region)
             update = update or datetime.combine(
                 date.fromisoformat("2005-03-30"), datetime.min.time()
             )
 
-            conn = load_db_data()
+            conn = load_db_data(region)
             self.unresolved_users = []
             self.resolved_users = {}
 
@@ -87,8 +123,60 @@ class CompareCommand(commands.Cog):
             for ranker in ranks_list:
                 identifier = find_rank(conn, int(ranker))
                 player = find_player(conn, identifier)
-                if player != None:
+                if player is not None and isinstance(player, dict):
                     self.resolved_users[player["name"]] = player
+
+            # Handle editions parameter to add user's data from older editions
+            if editions:
+                discord_users = load_discord_users()
+                user_id = str(ctx.user.id)
+                game_id = discord_users.get(user_id)
+
+                if game_id is None:
+                    await ctx.followup.send(
+                        "Your Discord account isn't linked to any Dokkan account. Please link your account (/link) to use the editions feature."
+                    )
+                    return
+
+                for edition in editions_list:
+                    if edition == "BEST":
+                        # Use find_best function to get best performance
+                        best_player = find_best(game_id, region)
+                        if best_player and isinstance(best_player, dict):
+                            # Add suffix to name to differentiate from current data
+                            best_player["name"] = (
+                                f"{best_player['name']} (WT{best_player['edition']})"
+                            )
+                            self.resolved_users[best_player["name"]] = best_player
+                    else:
+                        # Load data from specific edition
+                        older_editions_path = os.path.join(
+                            os.path.dirname(os.path.abspath(__file__)),
+                            "../older_editions",
+                            region,
+                        )
+                        db_path = os.path.join(
+                            older_editions_path, edition, f"{edition}.db"
+                        )
+
+                        if os.path.exists(db_path):
+                            try:
+                                edition_conn = sqlite3.connect(
+                                    f"file:{db_path}?mode=ro", uri=True
+                                )
+                                edition_player = find_player(edition_conn, game_id)
+                                edition_conn.close()
+
+                                if edition_player and isinstance(edition_player, dict):
+                                    # Add suffix to name to differentiate from current data
+                                    edition_player["name"] = (
+                                        f"{edition_player['name']} (WT{edition})"
+                                    )
+                                    self.resolved_users[edition_player["name"]] = (
+                                        edition_player
+                                    )
+                            except sqlite3.Error as e:
+                                print(f"Error loading edition {edition}: {e}")
 
             # Start resolving conflicts one by one
             await self.resolve_next_user(ctx, type, update)
@@ -98,7 +186,7 @@ class CompareCommand(commands.Cog):
             await ctx.followup.send(f"Me no worki lol ask Polo (@polowiper) 2 fix plz")
 
     async def resolve_next_user(self, ctx, type, update):
-        """Resolve multiple matches one at a time."""
+        """Resolve multiple matches one by one."""
         if not self.unresolved_users:
             # All users are resolved, proceed with comparison
             await self.process_comparison(ctx, type, update)

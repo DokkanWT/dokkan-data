@@ -57,21 +57,31 @@ class WinsCommand(commands.Cog):
         ]
         return choices
 
+    async def autocompletion_region(
+        self, interaction: discord.Interaction, current: str
+    ) -> typing.List[app_commands.Choice[str]]:
+        return [
+            app_commands.Choice(name="GLB", value="GLB"),
+            app_commands.Choice(name="JP", value="JP"),
+        ]
+
     @app_commands.command(name="wins", description="Show the wins of a player.")
     @app_commands.describe(
         identifier="The identifier of the player you want to see the wins of.",
         rank="If you wish to provide a rank instead of an identifier",
         borders="Whether or not you want to see the borders on your graphs",
+        region="Region to query (GLB or JP).",
     )
-    @app_commands.autocomplete(borders=autocomplete_borders)
+    @app_commands.autocomplete(borders=autocomplete_borders, region=autocompletion_region)
     async def wins(
-        self, ctx, identifier: str = None, rank: str = None, borders: str = None
+        self, ctx, identifier: str = None, rank: str = None, borders: str = None, region: str = "GLB"
     ):
         try:
             await ctx.response.defer()
-            conn = load_db_data()
+            region = (region or "GLB").upper()
+            conn = load_db_data(region)
             discord_users = load_discord_users()
-            update, _, _, _, _, _ = time_data()
+            update, _, _, _, _, _ = time_data(region=region)
 
             borders = find_borders(conn, 100) if borders == "1" else None
 

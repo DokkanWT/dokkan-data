@@ -75,6 +75,14 @@ class SeedCommand(commands.Cog):
         self.bot = bot
         globals()["bot"] = bot
 
+    async def autocompletion_region(
+        self, interaction: discord.Interaction, current: str
+    ) -> typing.List[app_commands.Choice[str]]:
+        return [
+            app_commands.Choice(name="GLB", value="GLB"),
+            app_commands.Choice(name="JP", value="JP"),
+        ]
+
     async def autocomplete_borders(
         self, interaction: discord.Interaction, current: str
     ) -> typing.List[app_commands.Choice[str]]:
@@ -90,16 +98,18 @@ class SeedCommand(commands.Cog):
         identifier="The identifier of the player you want to see the seed performance of.",
         rank="If you wish to provide a rank instead of an identifier",
         borders="Whether or not you want to see the borders on the graph",
+        region="Region to query (GLB or JP).",
     )
-    @app_commands.autocomplete(borders=autocomplete_borders)
+    @app_commands.autocomplete(borders=autocomplete_borders, region=autocompletion_region)
     async def seed(
-        self, ctx, identifier: str = None, rank: str = None, borders: str = None
+        self, ctx, identifier: str = None, rank: str = None, borders: str = None, region: str = "GLB"
     ):
         try:
             await ctx.response.defer()
-            conn = load_db_data()
+            region = (region or "GLB").upper()
+            conn = load_db_data(region)
             discord_users = load_discord_users()
-            update, *_ = time_data()
+            update, *_ = time_data(region=region)
             borders = find_borders(conn, 100) if borders == "1" else None
 
             if not update:

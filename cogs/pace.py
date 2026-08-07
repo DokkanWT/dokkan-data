@@ -99,15 +99,24 @@ class PaceCommand(commands.Cog):
         ]
         return choices
 
+    async def autocompletion_region(
+        self, interaction: discord.Interaction, current: str
+    ) -> typing.List[app_commands.Choice[str]]:
+        return [
+            app_commands.Choice(name="GLB", value="GLB"),
+            app_commands.Choice(name="JP", value="JP"),
+        ]
+
     @app_commands.command(name="pace", description="Show your current pace.")
     @app_commands.describe(
         pace_type="The pace type you want to see. Either 'wins' or 'points'.",
         identifier="The identifier of the player you want to see the pace of.",
         rank="If you wish to search the pace of a player with its rank instead of its name",
         borders="Whether or not you wish to see the border on your graph",
+        region="Region to query (GLB or JP).",
     )
     @app_commands.autocomplete(
-        pace_type=autocompletion_type_pace, borders=autocomplete_borders
+        pace_type=autocompletion_type_pace, borders=autocomplete_borders, region=autocompletion_region
     )
     async def pace(
         self,
@@ -116,6 +125,7 @@ class PaceCommand(commands.Cog):
         identifier: str = None,
         rank: str = None,
         borders: str = None,
+        region: str = "GLB",
     ):
         try:
             await ctx.response.defer()
@@ -126,9 +136,10 @@ class PaceCommand(commands.Cog):
                 )
                 return
 
-            conn = load_db_data()
+            region = (region or "GLB").upper()
+            conn = load_db_data(region)
             discord_users = load_discord_users()
-            update, start, end, total, left, elapsed = time_data()
+            update, start, end, total, left, elapsed = time_data(region=region)
             if update is None:
                 update = datetime.fromisoformat("2005-03-30")
                 update = datetime.combine(update, datetime.min.time())
@@ -143,7 +154,8 @@ class PaceCommand(commands.Cog):
                         )
                         return
                 else:
-                    identifier = find_rank(conn, rank)
+                    identifier = find_rank(conn, rank, region)
+            print(f"Identifier: {identifier}")
             players = find_player(conn, identifier)
             if borders == "1":
                 borders = find_borders(conn, 100)

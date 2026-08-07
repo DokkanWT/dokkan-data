@@ -28,6 +28,14 @@ class MaxCommand(commands.Cog):
             app_commands.Choice(name="No", value="0"),
         ]
 
+    async def autocompletion_region(
+        self, interaction: discord.Interaction, current: str
+    ) -> typing.List[app_commands.Choice[str]]:
+        return [
+            app_commands.Choice(name="GLB", value="GLB"),
+            app_commands.Choice(name="JP", value="JP"),
+        ]
+
     @app_commands.command(
         name="max", description="Show the maximum points or wins of a player."
     )
@@ -36,9 +44,10 @@ class MaxCommand(commands.Cog):
         identifier="The identifier of the player you want to see the maximum of.",
         rank="If you wish to use a rank instead of providing/using an identifier",
         borders="Whether or not you wish to see the borders displayed on the graph.",
+        region="Region to query (GLB or JP).",
     )
     @app_commands.autocomplete(
-        type=autocompletion_type_max, borders=autocomplete_borders
+        type=autocompletion_type_max, borders=autocomplete_borders, region=autocompletion_region
     )
     async def max_(
         self,
@@ -47,6 +56,7 @@ class MaxCommand(commands.Cog):
         identifier: str = None,
         rank: str = None,
         borders: str = None,
+        region: str = "GLB",
     ):
         try:
             await ctx.response.defer()
@@ -55,9 +65,10 @@ class MaxCommand(commands.Cog):
                     "Please provide a valid type. Either 'points' or 'wins'."
                 )
                 return
-            conn = load_db_data()
+            region = (region or "GLB").upper()
+            conn = load_db_data(region)
             discord_users = load_discord_users()
-            update, *_ = time_data()
+            update, *_ = time_data(region=region)
             update = update or datetime.fromisoformat("2005-03-30")
 
             if identifier is None:
@@ -90,20 +101,18 @@ class MaxCommand(commands.Cog):
                     placeholder="Select the correct player",
                     options=[
                         discord.SelectOption(
-                            label=f"#{p["ranks"][-1]}:{p["name"]}", value=p["name"]
+                            label=f"#{p['ranks'][-1]}:{p['name']}", value=str(index)
                         )
-                        for p in players
+                        for index, p in enumerate(players)
                     ],
                 )
 
                 async def select_callback(interaction: discord.Interaction):
-                    selected_player = next(
-                        p for p in players if p["name"] == select.values[0]
-                    )
+                    selected_player = players[int(select.values[0])]
                     view.clear_items()
                     await interaction.response.edit_message(view=view)
                     await self.process_player(
-                        ctx, selected_player, update, type, borders
+                        ctx, selected_player, update, type, borders, region
                     )
 
                 select.callback = select_callback
@@ -120,14 +129,15 @@ class MaxCommand(commands.Cog):
                 update,
                 type,
                 borders,
+                region,
             )
 
         except Exception as e:
             self.bot.log_message(f"An error occurred: {e}")
             await ctx.followup.send("Me no worki lol ask Polo (@polowiper) 2 fix plz")
 
-    async def process_player(self, ctx, player, update, type, borders=None):
-        conn = load_db_data()
+    async def process_player(self, ctx, player, update, type, borders=None, region: str = "GLB"):
+        conn = load_db_data(region)
         borders = find_borders(conn, 100) if borders == "1" else None
         maximum = player.get(f"max_{type}")
 

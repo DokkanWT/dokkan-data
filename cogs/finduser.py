@@ -3,6 +3,7 @@ import sqlite3
 import discord
 from discord import Interaction, app_commands
 from discord.ext import commands
+from cogs.utils import load_db_data
 
 
 class FindUser(commands.Cog):
@@ -10,10 +11,21 @@ class FindUser(commands.Cog):
         self.bot = bot
         globals()["bot"] = bot
 
+    async def autocompletion_region(
+        self, interaction: Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        return [
+            app_commands.Choice(name="GLB", value="GLB"),
+            app_commands.Choice(name="JP", value="JP"),
+        ]
+
     @app_commands.command(name="finduser", description="Find a user by name or ID.")
-    async def finduser(self, interaction: Interaction, identifier: str):
+    @app_commands.autocomplete(region=autocompletion_region)
+    @app_commands.describe(region="Region to query (GLB or JP).")
+    async def finduser(self, interaction: Interaction, identifier: str, region: str = "GLB"):
         await interaction.response.defer()
-        conn = sqlite3.connect("database.db")
+        region = (region or "GLB").upper()
+        conn = load_db_data(region)
         cursor = conn.cursor()
         identifier = "%" + "%".join(identifier) + "%"
         # Polo -> %P%o%l%o%          Fuzzy seaching supremacy

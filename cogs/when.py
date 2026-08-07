@@ -59,6 +59,7 @@ class WhenCommand(commands.Cog):
         identifier="The identifier of the player you want to see the estimated time of.",
         pace="Your pace per hour.",
         rank="If you wish to provide a rank instead of an identifier",
+        region="Region to query (GLB or JP).",
     )
     @app_commands.autocomplete(goal_type=autocompletion_type_goal)
     async def when(
@@ -69,9 +70,11 @@ class WhenCommand(commands.Cog):
         pace: int = 0,
         identifier: str = None,
         rank: str = None,
+        region: str = "GLB",
     ):
         try:
             await ctx.response.defer()
+            region = (region or "GLB").upper()
 
             if pace <= 0:
                 await ctx.followup.send(
@@ -92,9 +95,9 @@ class WhenCommand(commands.Cog):
                 return
 
             # Load database and user data
-            conn = load_db_data()
+            conn = load_db_data(region)
             discord_users = load_discord_users()
-            update, start, end, total, left, elapsed = time_data()
+            update, start, end, total, left, elapsed = time_data(update_only=False, region=region)
 
             if update is None:
                 self.bot.log_message("No update time found, setting to default")
@@ -130,7 +133,7 @@ class WhenCommand(commands.Cog):
                     ctx.user,
                     players,
                     lambda i, idx: self.calculate_when(
-                        ctx, goal, goal_type, pace, player[idx]
+                        ctx, goal, goal_type, pace, players[idx], region
                     ),
                 )
                 await ctx.followup.send(
@@ -139,15 +142,15 @@ class WhenCommand(commands.Cog):
                 return
 
             # If it's a dict (single player), process it directly
-            await self.calculate_when(ctx, goal, goal_type, pace, players)
+            await self.calculate_when(ctx, goal, goal_type, pace, players, region)
 
         except Exception as e:
             self.bot.log_message(f"An error occurred: {e}")
             await ctx.followup.send("Me no worki lol, ask Polo to fix plz.")
 
-    async def calculate_when(self, ctx, goal, goal_type, pace, player):
+    async def calculate_when(self, ctx, goal, goal_type, pace, player, region: str):
         """Calculate and send the estimated time to reach the goal."""
-        update, start, end, total, left, elapsed = time_data()
+        update, start, end, total, left, elapsed = time_data(update_only=False, region=region)
 
         if goal_type == "points":
             player_points = player["points"][-1]

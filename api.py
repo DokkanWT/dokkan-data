@@ -113,7 +113,7 @@ def get_user_by_identifier(identifier):
     return user, multiple_users
 
 
-@app.route("/get-user", methods=["GET"])
+@app.route("/api/get-user", methods=["GET"])
 def get_user():
     random_flag = request.args.get("random", "false").lower() == "true"
     identifier = request.args.get("identifier")
@@ -154,7 +154,7 @@ def get_user():
     return jsonify(user_data)
 
 
-@app.route("/get-top100", methods=["GET"])
+@app.route("/api/get-top100", methods=["GET"])
 def get_top100():
     users = get_top100_users()
     user_data = [format_user_data(user) for user in users]

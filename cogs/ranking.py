@@ -13,17 +13,28 @@ class RankingCommand(commands.Cog):
         self.bot = bot
         globals()["bot"] = bot
 
+    async def autocompletion_region(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        return [
+            app_commands.Choice(name="GLB", value="GLB"),
+            app_commands.Choice(name="JP", value="JP"),
+        ]
+
     @app_commands.command(name="ranking", description="Show the ranking of a player.")
     @app_commands.describe(
         identifier="The identifier of the player you want to see the ranking of.",
         rank="If you wish to provided a raw rank instead of an identifier",
+        region="Region to query (GLB or JP).",
     )
-    async def ranking(self, ctx, identifier: str = None, rank: str = None):
+    @app_commands.autocomplete(region=autocompletion_region)
+    async def ranking(self, ctx, identifier: str = None, rank: str = None, region: str = "GLB"):
         try:
             await ctx.response.defer()
-            conn = load_db_data()
+            region = (region or "GLB").upper()
+            conn = load_db_data(region)
             discord_users = load_discord_users()
-            update, start, end, total, left, elapsed = time_data()
+            update, start, end, total, left, elapsed = time_data(region=region)
             if update is None:
                 update = datetime.fromisoformat("2005-03-30")
                 update = datetime.combine(update, datetime.min.time())
@@ -58,7 +69,7 @@ class RankingCommand(commands.Cog):
                     placeholder="Select the correct player",
                     options=[
                         discord.SelectOption(
-                            label=f"#{player["renks"][-1]:{player["name"]}}",
+                            label=f"#{player['ranks'][-1]}:{player['name']}",
                             value=player["name"],
                         )
                         for player in players

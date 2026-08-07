@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import typing
 
 import discord
 from discord import app_commands
@@ -45,18 +46,29 @@ class TargetCommand(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
-
+    async def autocompletion_goal_type(
+        self, interaction: discord.Interaction, current: str
+    ) -> typing.List[app_commands.Choice[str]]:
+        choices = [
+            app_commands.Choice(name="Points", value="points"),
+            app_commands.Choice(name="Wins", value="wins"),
+        ]
+        return choices
     @app_commands.command(
         name="target", description="Show the pace needed to reach a goal."
     )
     @app_commands.describe(
         goal="The goal you want to reach.",
         identifier="The identifier of the player you want to see the pace of.",
+        goal_type="Whether you want to reach a number of wins or points.",
         rank="If you wish to provide a rank instead of an identifier",
+        region="Region to query (GLB or JP).",
     )
-    async def target(self, ctx, goal: str, identifier: str = None, rank: str = None):
+    @app_commands.autocomplete(goal_type=autocompletion_goal_type)
+    async def target(self, ctx, goal: str, identifier: str = None, goal_type: str = "points", rank: str = None, region: str = "GLB"):
         try:
             await ctx.response.defer()
+            region = (region or "GLB").upper()
 
             # Convert goal (e.g., 850M -> 850000000)
             num = {"m": 1000000, "b": 1000000000, "k": 1000}
@@ -71,9 +83,9 @@ class TargetCommand(commands.Cog):
                 return
 
             # Load database and user data
-            conn = load_db_data()
+            conn = load_db_data(region)
             discord_users = load_discord_users()
-            update, start, end, total, left, elapsed = time_data()
+            update, start, end, total, left, elapsed = time_data(update_only=False, region=region)
 
             if left is None:
                 await ctx.followup.send("No time left to do the calculations.")
@@ -105,7 +117,7 @@ class TargetCommand(commands.Cog):
                 view = PlayerSelectView(
                     ctx.user,
                     player,
-                    lambda i, idx: self.send_target_pace(ctx, goal, player[idx]),
+                    lambda i, idx: self.send_target_pace(ctx, goal, player[idx], region, goal_type=goal_type),
                 )
                 await ctx.followup.send(
                     "Multiple players found. Please select the correct one:", view=view
@@ -113,31 +125,42 @@ class TargetCommand(commands.Cog):
                 return
 
             # If it's a dict (single player), process it directly
-            await self.send_target_pace(ctx, goal, player)
+            await self.send_target_pace(ctx, goal, player, region, goal_type=goal_type)
 
         except Exception as e:
             self.bot.log_message(f"An error occurred: {e}")
             await ctx.followup.send("Me no worki lol, ask Polo to fix plz.")
 
-    async def send_target_pace(self, ctx, goal, player):
+    async def send_target_pace(self, ctx, goal, player, region: str, goal_type: str):
         """Send the calculated pace to reach the target."""
-        wins_points_ratio = player["points_wins"][-1]
-        update, start, end, total, left, elapsed = time_data()
 
-        req_pace = (goal - player["points"][-1]) / (
-            left.days * 24 + left.seconds / 3600
-        )
-        req_wins_pace = req_pace / wins_points_ratio
+        update, start, end, total, left, elapsed = time_data(update_only=False, region=region)
+        if goal_type == "points":
+            wins_points_ratio = player["points_wins"][-1]
 
-        if player["points"][-1] >= goal:
-            warning_text = "**:warning: You already have more points than your goal, so the required pace is 0.**\n\n"
+            req_pace = (goal - player["points"][-1]) / (
+                left.days * 24 + left.seconds / 3600
+            )
+            req_wins_pace = req_pace / wins_points_ratio
+
+            if player["points"][-1] >= goal:
+                warning_text = "**:warning: You already have more points than your goal, so the required pace is 0.**\n\n"
+            else:
+                warning_text = ""
         else:
-            warning_text = ""
+            req_pace = (goal - player["wins"][-1]) / (
+                left.days * 24 + left.seconds / 3600
+            )
+            req_wins_pace = req_pace
+            if player["wins"][-1] >= goal:
+                warning_text = "**:warning: You already have more wins than your goal, so the required pace is 0.**\n\n"
+            else:
+                warning_text = ""
 
         embed = discord.Embed(
             title=f"{player['name']}'s target pace",
             color=discord.Color.green(),
-            description=f"{warning_text}• You would need to have a pace of **{round(req_wins_pace, 2)}** wins/hour to reach **{goal:,}** points.\n\n_Note: This is based on your current points, goal, remaining time, and average points/wins ratio._",
+            description=f"{warning_text}• You would need to have a pace of **{round(req_wins_pace, 2)}** wins/hour to reach **{goal:,}** {goal_type}.\n\n_Note: This is based on your current points, goal, remaining time, and average points/wins ratio._",
         )
         await ctx.followup.send(embed=embed)
 

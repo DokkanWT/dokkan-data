@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dokkan WT - Maintenance</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container mt-5 text-center">
+        <h1>Scheduled Maintenance</h1>
+        <p class="lead">The Dokkan WT Stats service is currently under maintenance.</p>
+        <p>Please check back later when the service is restored.</p>
+
+        <!-- GIF -->
+        <div class="my-4">
+            <img src="{{ url_for('static', filename='healing.gif') }}"
+                 alt="Goku Healing Chamber"
+                 class="img-fluid rounded shadow">
+        </div>
+
+        <hr>
+        <p>
+            For updates on the progress of the maintenance, follow us on Twitter:<br>
+            <a href="https://x.com/dokkan_wt_info" target="_blank">@dokkan_wt_info</a>
+        </p>
+    </div>
+</body>
+</html>

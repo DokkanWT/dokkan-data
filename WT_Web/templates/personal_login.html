@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personal Performance - {{ region }} Region</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <style>
+        .region-indicator {
+            background: {{ 'linear-gradient(45deg, #ff6b35, #f7931e)' if region == 'JP' else 'linear-gradient(45deg, #4285f4, #34a853)' }};
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('leaderboard') }}">
+                Dokkan WT Stats <span class="region-indicator">{{ region }}</span>
+            </a>
+            <div class="navbar-nav">
+                <a class="nav-link" href="{{ url_for('leaderboard') }}">Leaderboard</a>
+                <a class="nav-link active" href="{{ url_for('personal_performance') }}">My Performance</a>
+                <a class="nav-link" href="{{ url_for('older_editions') }}">Older Editions</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-5">
+        <div class="d-flex justify-content-center">
+            <div style="max-width: 500px; width: 100%;">
+                <div class="mb-4">
+                    <h3 class="mb-3">Personal Performance Login - {{ region }} Region</h3>
+                    {% if error %}
+                    <div class="alert alert-danger" role="alert">
+                        {{ error }}
+                    </div>
+                    {% endif %}
+
+                    <p class="text-muted mb-4">
+                        Enter your {{ region }} region in-game ID to view your personal performance statistics and compare with other players.
+                    </p>
+
+                    <form method="POST" action="{{ url_for('set_player_id') }}">
+                        {% if region == 'JP' %}
+                            <input type="hidden" name="region" value="JP">
+                        {% endif %}
+                        <div class="mb-3">
+                            <label for="player_id" class="mb-2">Your Player ID ({{ region }} Region):</label>
+                            <input type="text" class="form-control" id="player_id" name="player_id"
+                                   placeholder="Enter your in-game ID" required>
+                            <div class="text-muted mt-1">
+                                This ID will be saved in your browser for future visits.
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <button type="submit" class="btn btn-primary w-100">View My Performance</button>
+                        </div>
+                    </form>
+
+                    <div class="text-center">
+                        {% set back_url = url_for('leaderboard') %}
+                        {% if region == 'JP' %}
+                            {% set back_url = back_url + '?region=JP' %}
+                        {% endif %}
+                        <a href="{{ back_url }}" class="btn btn-outline-primary">Back to Leaderboard</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

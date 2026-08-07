@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ player.name if player else 'Personal Performance' }} - {{ region }} Region</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nouislider@15.7.0/dist/nouislider.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/nouislider@15.7.0/dist/nouislider.min.js"></script>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <style>
+        /* Labels for the slider */
+        .range-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+        #chartSlider {
+            margin-bottom: 15px;
+        }
+        .region-indicator {
+            background: {{ 'linear-gradient(45deg, #ff6b35, #f7931e)' if region == 'JP' else 'linear-gradient(45deg, #4285f4, #34a853)' }};
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('leaderboard') }}">
+                Dokkan WT Stats <span class="region-indicator">{{ region }}</span>
+            </a>
+            <div class="navbar-nav">
+                <a class="nav-link" href="{{ url_for('leaderboard') }}">Leaderboard</a>
+                <a class="nav-link active" href="{{ url_for('personal_performance') }}">My Performance</a>
+                <a class="nav-link" href="{{ url_for('older_editions') }}">Older Editions</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-5">
+        {% if no_tournament %}
+        <div class="alert alert-info text-center">
+            <h4>No Ongoing World Tournament</h4>
+            <p class="mb-0">There is currently no active World Tournament in the {{ region }} region. Your personal performance data is not available.</p>
+            <p class="mt-2 mb-0">
+                <a href="{{ url_for('older_editions') }}" class="btn btn-outline-primary">View Past Tournaments</a>
+            </p>
+        </div>
+        {% else %}
+        <div class="d-flex flex-column flex-lg-row gap-4">
+            <!-- Main content with graph -->
+            <div style="flex: 2;">
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4 class="mb-0">{{ player.name }} - Performance <span class="region-indicator">{{ region }}</span></h4>
+                        <div class="d-flex align-items-center gap-2">
+                            <form method="get" class="d-flex align-items-center">
+                                {% for player_obj in manually_added_players %}
+                                    <input type="hidden" name="id" value="{{ player_obj.id }}">
+                                {% endfor %}
+                                {% if request.args.get('include_nearby') == 'true' %}
+                                    <input type="hidden" name="include_nearby" value="true">
+                                {% endif %}
+                                {% if region == 'JP' %}
+                                    <input type="hidden" name="region" value="JP">
+                                {% endif %}
+                                <label for="typeSelect" class="me-2 mb-0">Stat:</label>
+                                <select class="form-select" id="typeSelect" name="type" onchange="this.form.submit()">
+                                    {% for t in stat_types %}
+                                        <option value="{{ t }}" {% if t == stat_type %}selected{% endif %}>{{ t.replace('_', ' ').title() }}</option>
+                                    {% endfor %}
+                                </select>
+                            </form>
+                        </div>
+                    </div>
+                    <div>
+                        <canvas id="performanceChart" width="800" height="400"
+                                data-stat-type="{{ stat_type }}"
+                                data-compare-ids="{% for player_obj in manually_added_players %}{{ player_obj.id }}{% if not loop.last %},{% endif %}{% endfor %}"
+                                data-include-nearby="{{ 'true' if request.args.get('include_nearby') == 'true' else 'false' }}"
+                                data-region="{{ region }}">
+                        </canvas>
+                    </div>
+
+                    <!-- noUiSlider container -->
+                    <div id="chartSlider" class="mt-3 mb-1"></div>
+                    <div class="range-labels">
+                        <span id="rangeStartLabel">Start: 1</span>
+                        <span id="rangeEndLabel">End: 100</span>
+                    </div>
+                </div>
+
+                <!-- Add player comparison -->
+                <div>
+                    <h5 class="mb-3">Add Player for Comparison</h5>
+                    <form method="post" class="position-relative" autocomplete="off" id="addPlayerForm">
+                        {% for player_obj in manually_added_players %}
+                            <input type="hidden" name="id" value="{{ player_obj.id }}">
+                        {% endfor %}
+                        {% if request.args.get('include_nearby') == 'true' %}
+                            <input type="hidden" name="include_nearby" value="true">
+                        {% endif %}
+                        {% if region == 'JP' %}
+                            <input type="hidden" name="region" value="JP">
+                        {% endif %}
+                        <div class="d-flex gap-2">
+                            <input type="text" class="form-control" id="addPlayerInput" name="add_player_id"
+                                   placeholder="Search player by name or ID" required autocomplete="off">
+                            <button class="btn btn-primary" type="submit">Add Player</button>
+                        </div>
+                        <div id="addPlayerResults" class="list-group"></div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Sidebar with gap information -->
+            <div style="flex: 1;">
+                <div class="mb-3">
+                    <h5 class="mb-3">Rank Gap Analysis</h5>
+                    {% if gap_data.pro %}
+                    <div class="mb-3 p-3 border rounded">
+                        <h6 class="mb-2">Above You - Rank {{ gap_data.pro.rank }}</h6>
+                        <p class="mb-1"><strong>{{ gap_data.pro.name }}</strong></p>
+                        <p class="mb-1">Points: <strong>{{ "{:,}".format(gap_data.pro.points) }}</strong></p>
+                        <p class="mb-1">Gap: <strong>{{ "{:,}".format(gap_data.pro.gap) }}</strong></p>
+                        <p class="mb-1">
+                            Delta:
+                            <span class="{% if gap_data.pro.delta > 0 %}text-success{% else %}text-danger{% endif %}">
+                                {{ "{:,}".format(gap_data.pro.delta) }}
+                            </span>
+                        </p>
+                        {% if gap_data.pro.is_faster %}
+                            <small class="text-warning">They're farming faster than you!</small>
+                        {% elif gap_data.pro.estimated_time > 0 %}
+                            <small class="text-info">~{{ gap_data.pro.estimated_time }} minutes to catch up</small>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-3 p-3 border rounded bg-primary text-white">
+                        <h6 class="mb-2">You - Rank {{ player.ranks[-1] }}</h6>
+                        <p class="mb-0"><strong>{{ player.name }}</strong></p>
+                        <p class="mb-0">Points: <strong>{{ "{:,}".format(player.points[-1]) }}</strong></p>
+                    </div>
+
+                    {% if gap_data.noob %}
+                    <div class="mb-3 p-3 border rounded">
+                        <h6 class="mb-2">Below You - Rank {{ gap_data.noob.rank }}</h6>
+                        <p class="mb-1"><strong>{{ gap_data.noob.name }}</strong></p>
+                        <p class="mb-1">Points: <strong>{{ "{:,}".format(gap_data.noob.points) }}</strong></p>
+                        <p class="mb-1">Gap: <strong>{{ "{:,}".format(gap_data.noob.gap) }}</strong></p>
+                        <p class="mb-1">
+                            Delta:
+                            <span class="{% if gap_data.noob.delta > 0 %}text-success{% else %}text-danger{% endif %}">
+                                {{ "{:,}".format(gap_data.noob.delta) }}
+                            </span>
+                        </p>
+                    </div>
+                    {% endif %}
+
+                    {% if gap_data.update_str %}
+                    <div class="text-center">
+                        <small class="text-muted">
+                            Updated: {{ gap_data.update_str }}
+                        </small>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Include nearby players checkbox -->
+                <div>
+                    <h6 class="mb-3">Include Nearby Players</h6>
+                    <form method="get" id="nearbyForm">
+                        {% for player_obj in manually_added_players %}
+                            <input type="hidden" name="id" value="{{ player_obj.id }}">
+                        {% endfor %}
+                        <input type="hidden" name="type" value="{{ stat_type }}">
+                        {% if region == 'JP' %}
+                            <input type="hidden" name="region" value="JP">
+                        {% endif %}
+                        <div class="mb-2">
+                            <input class="form-check-input" type="checkbox" id="includeNearby" name="include_nearby" value="true"
+                                   {% if request.args.get('include_nearby') == 'true' %}checked{% endif %}
+                                   onchange="this.form.submit()">
+                            <label class="form-check-label" for="includeNearby">
+                                Show players 2 ranks above and below in graphs
+                            </label>
+                        </div>
+                        <small class="text-muted">
+                            This will add the players directly above and below you to the comparison graphs.
+                        </small>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Logout Section -->
+    <div class="container mt-5 mb-5">
+        <div class="d-flex justify-content-center">
+            <form method="post" action="{{ url_for('logout') }}" class="text-center">
+                {% if region == 'JP' %}
+                    <input type="hidden" name="region" value="JP">
+                {% endif %}
+                <button type="submit" class="btn btn-danger">
+                    Logout
+                </button>
+                <p class="text-muted mt-2 mb-0">This will clear your player ID and return you to the home page</p>
+            </form>
+        </div>
+    </div>
+
+    <script>
+    // Load chart data and create chart
+    let performanceChart = null;
+
+    function loadChart() {
+        const canvas = document.getElementById('performanceChart');
+        const statType = canvas.dataset.statType;
+        const compareIds = canvas.dataset.compareIds ? canvas.dataset.compareIds.split(',').filter(id => id.trim()) : [];
+        const includeNearby = canvas.dataset.includeNearby === 'true';
+        const region = canvas.dataset.region;
+        const hasPlayerCookie = document.cookie.includes('player_id=');
+        const endpoint = hasPlayerCookie ? '/chart_data_personal' : '/chart_data';
+
+        let chartUrl = endpoint + '?type=' + encodeURIComponent(statType);
+        compareIds.forEach(id => {
+            chartUrl += '&id=' + encodeURIComponent(id.trim());
+        });
+        if (includeNearby && hasPlayerCookie) {
+            chartUrl += '&include_nearby=true';
+        }
+        if (region === 'JP') {
+            chartUrl += '&region=JP';
+        }
+
+        fetch(chartUrl)
+            .then(response => response.json())
+            .then(data => {
+                const ctx = canvas.getContext('2d');
+                performanceChart = new Chart(ctx, data);
+
+                // Determine x-range
+                const allX = data.data.datasets.flatMap(ds => ds.data.map(p => p.x));
+                const minX = Math.min(...allX);
+                const maxX = Math.max(...allX);
+
+                // Initialize noUiSlider
+                const sliderContainer = document.getElementById('chartSlider');
+                const startLabel = document.getElementById('rangeStartLabel');
+                const endLabel = document.getElementById('rangeEndLabel');
+
+                noUiSlider.create(sliderContainer, {
+                    start: [minX, maxX],
+                    connect: true,
+                    range: { min: minX, max: maxX },
+                    step: 1,
+                    tooltips: [true, true],
+                    format: {
+                        to: value => Math.round(value),
+                        from: value => Number(value)
+                    }
+                });
+
+                sliderContainer.noUiSlider.on('update', (values) => {
+                    const [start, end] = values.map(v => parseInt(v));
+                    startLabel.textContent = `Start: ${start}`;
+                    endLabel.textContent = `End: ${end}`;
+                    performanceChart.options.scales.x.min = start;
+                    performanceChart.options.scales.x.max = end;
+                    performanceChart.update();
+                });
+            })
+            .catch(error => {
+                console.error('Error loading chart data:', error);
+                canvas.innerHTML = '<p class="text-danger">Error loading chart data</p>';
+            });
+    }
+
+    loadChart();
+
+    // ================= Search functionality =================
+    const addInput = document.getElementById('addPlayerInput');
+    const addResults = document.getElementById('addPlayerResults');
+    const addForm = document.getElementById('addPlayerForm');
+    const region = "{{ region }}";
+    let addTimeout = null;
+
+    addInput.addEventListener('input', function() {
+        clearTimeout(addTimeout);
+        const query = this.value.trim();
+        if (!query) {
+            addResults.innerHTML = '';
+            return;
+        }
+
+        addTimeout = setTimeout(() => {
+            let searchUrl = `/search_player?q=${encodeURIComponent(query)}`;
+            if (region === 'JP') {
+                searchUrl += '&region=JP';
+            }
+            
+            fetch(searchUrl)
+                .then(r => r.json())
+                .then(data => {
+                    addResults.innerHTML = '';
+                    if (data.length === 0) return;
+
+                    data.forEach(player => {
+                        const item = document.createElement('a');
+                        item.className = 'list-group-item list-group-item-action';
+                        let text = `${player.name} (ID: ${player.id}`;
+                        if (player.rank !== null && player.rank !== undefined) {
+                            text += `, Rank: ${player.rank}`;
+                        }
+                        text += ")";
+                        item.textContent = text;
+                        item.href = '#';
+                        item.onclick = function(e) {
+                            e.preventDefault();
+                            addInput.value = player.id;
+                            addResults.innerHTML = '';
+                            addForm.submit();
+                        };
+                        addResults.appendChild(item);
+                    });
+                });
+        }, 200);
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!addInput.contains(e.target) && !addResults.contains(e.target)) {
+            addResults.innerHTML = '';
+        }
+    });
+
+    // ================== SSE Update Handling ==================
+    const evtSource = new EventSource('/events');
+
+    let updateBtn = document.getElementById('updateButton');
+    if (!updateBtn) {
+        updateBtn = document.createElement('button');
+        updateBtn.id = 'updateButton';
+        updateBtn.textContent = 'New Data Available - Click to Refresh';
+        updateBtn.style.position = 'fixed';
+        updateBtn.style.bottom = '20px';
+        updateBtn.style.right = '20px';
+        updateBtn.style.display = 'none';
+        updateBtn.style.zIndex = '9999';
+        updateBtn.className = 'btn btn-warning';
+        updateBtn.onclick = () => location.reload();
+        document.body.appendChild(updateBtn);
+    }
+
+    evtSource.onmessage = function(event) {
+        if (event.data === "update") {
+            updateBtn.style.display = 'block';
+        }
+    };
+    </script>
+</body>
+</html>

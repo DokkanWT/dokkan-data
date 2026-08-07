@@ -6,3 +6,6 @@ __pycache__/
 cogs/__pycache__/
 data.json
 database.db
+config.py.local
+instances/
+older_editions/

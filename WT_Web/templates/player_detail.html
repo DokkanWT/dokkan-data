@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ player.name }} - Player Details ({{ region }})</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nouislider@15.7.0/dist/nouislider.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/nouislider@15.7.0/dist/nouislider.min.js"></script>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <style>
+        .range-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+        #chartSlider {
+            margin-bottom: 15px;
+        }
+        .region-indicator {
+            background: {{ 'linear-gradient(45deg, #ff6b35, #f7931e)' if region == 'JP' else 'linear-gradient(45deg, #4285f4, #34a853)' }};
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('leaderboard') }}">
+                Dokkan WT Stats <span class="region-indicator">{{ region }}</span>
+            </a>
+            <div class="navbar-nav">
+                <a class="nav-link" href="{{ url_for('leaderboard') }}">Leaderboard</a>
+                <a class="nav-link" href="{{ url_for('personal_performance') }}">My Performance</a>
+                <a class="nav-link" href="{{ url_for('older_editions') }}">Older Editions</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-5">
+        <!-- Back button -->
+        <div class="mb-4">
+            {% if current_edition %}
+                <a href="{{ url_for('edition_leaderboard_with_region', region=region, database=current_edition) }}" class="btn btn-outline-primary">
+                    Back to {{ current_edition.replace('.db', '').replace('_', ' ').title() }} Leaderboard
+                </a>
+            {% else %}
+                {% set back_url = url_for('leaderboard') %}
+                {% if region == 'JP' %}
+                    {% set back_url = back_url + '?region=JP' %}
+                {% endif %}
+                <a href="{{ back_url }}" class="btn btn-outline-primary">
+                    Back to Leaderboard
+                </a>
+            {% endif %}
+        </div>
+
+        <div class="d-flex flex-column flex-lg-row gap-4">
+            <!-- Main content with graph -->
+            <div style="flex: 2;">
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4 class="mb-0">{{ player.name }} - Performance</h4>
+                        <div class="d-flex align-items-center gap-2">
+                            <form method="get" class="d-flex align-items-center">
+                                <input type="hidden" name="main_id" value="{{ player.id }}">
+                                {% if current_edition %}
+                                <input type="hidden" name="database" value="{{ current_edition }}">
+                                {% endif %}
+                                {% if region == 'JP' %}
+                                <input type="hidden" name="region" value="JP">
+                                {% endif %}
+                                {% for player_obj in manually_added_players %}
+                                    <input type="hidden" name="id" value="{{ player_obj.id }}">
+                                {% endfor %}
+                                <label for="typeSelect" class="me-2 mb-0">Stat:</label>
+                                <select class="form-select" id="typeSelect" name="type" onchange="this.form.submit()">
+                                    {% for t in stat_types %}
+                                        <option value="{{ t }}" {% if t == stat_type %}selected{% endif %}>{{ t.replace('_', ' ').title() }}</option>
+                                    {% endfor %}
+                                </select>
+                            </form>
+                        </div>
+                    </div>
+                    <div>
+                        <canvas id="performanceChart" width="800" height="400"
+                                data-stat-type="{{ stat_type }}"
+                                data-compare-ids="{% for player_obj in manually_added_players %}{{ player_obj.id }}{% if not loop.last %},{% endif %}{% endfor %}"
+                                data-region="{{ region }}">
+                        </canvas>
+                    </div>
+
+                    <!-- noUiSlider container -->
+                    <div id="chartSlider" class="mt-3 mb-1"></div>
+                    <div class="range-labels">
+                        <span id="rangeStartLabel">Start: 1</span>
+                        <span id="rangeEndLabel">End: 100</span>
+                    </div>
+                </div>
+
+                <!-- Add player comparison -->
+                <div>
+                    <h5 class="mb-3">Add Player for Comparison</h5>
+                    <form method="get" class="position-relative" autocomplete="off" id="addPlayerForm">
+                        <input type="hidden" name="main_id" value="{{ player.id }}">
+                        {% if current_edition %}
+                        <input type="hidden" name="database" value="{{ current_edition }}">
+                        {% endif %}
+                        {% if region == 'JP' %}
+                        <input type="hidden" name="region" value="JP">
+                        {% endif %}
+                        {% for player_obj in manually_added_players %}
+                            <input type="hidden" name="id" value="{{ player_obj.id }}">
+                        {% endfor %}
+                        <input type="hidden" name="type" value="{{ stat_type }}">
+                        <div class="d-flex gap-2">
+                            <input type="text" class="form-control" id="addPlayerInput" name="add_player_id"
+                                   placeholder="Search player by name or ID" required autocomplete="off">
+                            <button class="btn btn-primary" type="submit">Add Player</button>
+                        </div>
+                        <div id="addPlayerResults" class="list-group"></div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Sidebar with player info -->
+            <div style="flex: 1;">
+                <div class="mb-3">
+                    <h5 class="mb-3">Player Information</h5>
+                    <div>
+                        <h6 class="mb-2">{{ player.name }} <span class="region-indicator">{{ region }}</span></h6>
+                        <p class="mb-1">ID: <strong>{{ player.id }}</strong></p>
+                        <p class="mb-1">Current Rank: <strong>{{ player.ranks[-1] if player.ranks else 'N/A' }}</strong></p>
+                        <p class="mb-1">Current Points: <strong>{{ "{:,}".format(player.points[-1]) if player.points else 'N/A' }}</strong></p>
+                        <p class="mb-1">Current Wins: <strong>{{ player.wins[-1] if player.wins else 'N/A' }}</strong></p>
+                        <p class="mb-0">
+                            <small class="text-muted">
+                                Last updated: {{ gap_data.update_str if gap_data else 'N/A' }}
+                            </small>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    let performanceChart = null;
+
+    function loadChart() {
+        const canvas = document.getElementById('performanceChart');
+        const statType = canvas.dataset.statType;
+        const compareIds = canvas.dataset.compareIds ? canvas.dataset.compareIds.split(',').filter(id => id.trim()) : [];
+        const region = canvas.dataset.region;
+        const currentEdition = '{{ current_edition }}' || null;
+
+        let chartUrl = '/chart_data?type=' + encodeURIComponent(statType);
+        if (currentEdition) chartUrl += '&database=' + encodeURIComponent(currentEdition);
+        if (region === 'JP') chartUrl += '&region=JP';
+        chartUrl += '&id={{ player.id }}';
+        compareIds.forEach(id => { chartUrl += '&id=' + encodeURIComponent(id.trim()); });
+
+        fetch(chartUrl)
+            .then(response => response.json())
+            .then(data => {
+                const ctx = canvas.getContext('2d');
+                performanceChart = new Chart(ctx, data);
+
+                const allX = data.data.datasets.flatMap(ds => ds.data.map(p => p.x));
+                const minX = Math.min(...allX);
+                const maxX = Math.max(...allX);
+
+                const sliderContainer = document.getElementById('chartSlider');
+                const startLabel = document.getElementById('rangeStartLabel');
+                const endLabel = document.getElementById('rangeEndLabel');
+
+                noUiSlider.create(sliderContainer, {
+                    start: [minX, maxX],
+                    connect: true,
+                    range: { min: minX, max: maxX },
+                    step: 1,
+                    tooltips: [true, true],
+                    format: { to: value => Math.round(value), from: value => Number(value) }
+                });
+
+                sliderContainer.noUiSlider.on('update', (values) => {
+                    const [start, end] = values.map(v => parseInt(v));
+                    startLabel.textContent = `Start: ${start}`;
+                    endLabel.textContent = `End: ${end}`;
+                    performanceChart.options.scales.x.min = start;
+                    performanceChart.options.scales.x.max = end;
+                    performanceChart.update();
+                });
+            })
+            .catch(error => {
+                console.error('Error loading chart data:', error);
+                canvas.innerHTML = '<p class="text-danger">Error loading chart data</p>';
+            });
+    }
+
+    loadChart();
+
+    const addInput = document.getElementById('addPlayerInput');
+    const addResults = document.getElementById('addPlayerResults');
+    const addForm = document.getElementById('addPlayerForm');
+    const region = "{{ region }}";
+    let addTimeout = null;
+
+    addInput.addEventListener('input', function() {
+        clearTimeout(addTimeout);
+        const query = this.value.trim();
+        if (!query) { addResults.innerHTML = ''; return; }
+
+        addTimeout = setTimeout(() => {
+            let searchUrl = `/search_player?q=${encodeURIComponent(query)}`;
+            const urlParams = new URLSearchParams(window.location.search);
+            const database = urlParams.get('database');
+            if (database) searchUrl += `&database=${encodeURIComponent(database)}`;
+            if (region === 'JP') searchUrl += `&region=JP`;
+            
+            fetch(searchUrl)
+                .then(r => r.json())
+                .then(data => {
+                    addResults.innerHTML = '';
+                    if (data.length === 0) return;
+                    data.forEach(player => {
+                        const item = document.createElement('a');
+                        item.className = 'list-group-item list-group-item-action';
+                        let text = `${player.name} (ID: ${player.id}`;
+                        if (player.rank !== null && player.rank !== undefined) text += `, Rank: ${player.rank}`;
+                        text += ")";
+                        item.textContent = text;
+                        item.href = '#';
+                        item.onclick = function(e) { e.preventDefault(); addInput.value = player.id; addResults.innerHTML = ''; addForm.submit(); };
+                        addResults.appendChild(item);
+                    });
+                });
+        }, 200);
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!addInput.contains(e.target) && !addResults.contains(e.target)) addResults.innerHTML = '';
+    });
+
+    {% if not current_edition %}
+    const evtSource = new EventSource('/events');
+    let updateBtn = document.getElementById('updateButton');
+    if (!updateBtn) {
+        updateBtn = document.createElement('button');
+        updateBtn.id = 'updateButton';
+        updateBtn.textContent = 'New Data Available - Click to Refresh';
+        updateBtn.style.position = 'fixed';
+        updateBtn.style.bottom = '20px';
+        updateBtn.style.right = '20px';
+        updateBtn.style.display = 'none';
+        updateBtn.style.zIndex = '9999';
+        updateBtn.className = 'btn btn-warning';
+        updateBtn.onclick = () => location.reload();
+        document.body.appendChild(updateBtn);
+    }
+    evtSource.onmessage = function(event) { if (event.data === "update") updateBtn.style.display = 'block'; };
+    {% endif %}
+    </script>
+</body>
+</html>

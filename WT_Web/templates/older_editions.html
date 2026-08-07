@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Older Editions</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <style>
+        .region-indicator {
+            background: linear-gradient(45deg, #4285f4, #34a853);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+
+        .region-indicator.jp {
+            background: linear-gradient(45deg, #ff6b35, #f7931e);
+        }
+
+        .region-switcher {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .region-switcher a {
+            padding: 8px 16px;
+            border-radius: 20px;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: all 0.3s;
+            font-weight: bold;
+        }
+
+        .region-switcher a.active {
+            background: #4285f4;
+            color: white;
+        }
+
+        .region-switcher a:not(.active) {
+            background: #f8f9fa;
+            color: #6c757d;
+        }
+
+        .region-switcher a:hover:not(.active) {
+            background: #e9ecef;
+        }
+
+        .region-section {
+            margin-bottom: 40px;
+        }
+
+        .region-header {
+            border-bottom: 3px solid;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        .region-header.glb {
+            border-color: #4285f4;
+        }
+
+        .region-header.jp {
+            border-color: #ff6b35;
+        }
+    </style>
+</head>
+
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('leaderboard') }}">
+                Dokkan WT Stats
+            </a>
+            <div class="navbar-nav">
+                <a class="nav-link" href="{{ url_for('leaderboard') }}">Leaderboard</a>
+                <a class="nav-link" href="{{ url_for('personal_performance') }}">My Performance</a>
+                <a class="nav-link active" href="{{ url_for('older_editions') }}">Older Editions</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-5">
+        <div>
+            <h2 class="mb-4">Older Editions</h2>
+            <p class="text-muted mb-4">Browse historical tournament data from previous editions across both regions.</p>
+
+            {% if editions %}
+            <!-- Show GLB editions -->
+            {% if editions.GLB %}
+            <div class="region-section">
+                <h4 class="region-header glb">
+                    Global (GLB) Tournaments
+                    <span class="region-indicator">GLB</span>
+                </h4>
+                <div class="d-flex flex-column flex-md-row flex-wrap gap-4">
+                    {% for edition in editions.GLB %}
+                    <div style="flex: 1; min-width: 300px;">
+                        <div class="p-3 border rounded">
+                            <h5 class="mb-2">{{ edition.name }}</h5>
+                            <p class="text-muted mb-3">{{ edition.description }}</p>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small class="text-muted">
+                                    {{ edition.player_count }} players
+                                </small>
+                                <a href="{{ url_for('edition_leaderboard_with_region', region='GLB', database=edition.filename) }}" class="btn btn-primary">
+                                    View Leaderboard
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Show JP editions -->
+            {% if editions.JP %}
+            <div class="region-section">
+                <h4 class="region-header jp">
+                    Japan (JP) Tournaments
+                    <span class="region-indicator jp">JP</span>
+                </h4>
+                <div class="d-flex flex-column flex-md-row flex-wrap gap-4">
+                    {% for edition in editions.JP %}
+                    <div style="flex: 1; min-width: 300px;">
+                        <div class="p-3 border rounded">
+                            <h5 class="mb-2">{{ edition.name }}</h5>
+                            <p class="text-muted mb-3">{{ edition.description }}</p>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small class="text-muted">
+                                    {{ edition.player_count }} players
+                                </small>
+                                <a href="{{ url_for('edition_leaderboard_with_region', region='JP', database=edition.filename) }}" class="btn btn-primary">
+                                    View Leaderboard
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if not editions.GLB and not editions.JP %}
+            <div class="text-center py-5">
+                <h4 class="text-muted">No older editions found</h4>
+                <p class="text-muted">Older edition databases will appear here when added to the older_editions folder.</p>
+            </div>
+            {% endif %}
+            {% else %}
+            <div class="text-center py-5">
+                <h4 class="text-muted">No older editions found</h4>
+                <p class="text-muted">Older edition databases will appear here when added to the older_editions folder.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+
+</html>

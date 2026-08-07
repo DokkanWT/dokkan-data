@@ -3,8 +3,7 @@
 
   inputs.nixpkgs.url = "nixpkgs/nixpkgs-unstable";
 
-  outputs = { nixpkgs, ... }:
-  let
+  outputs = {nixpkgs, ...}: let
     system = "x86_64-linux";
     pkgs = import nixpkgs {
       inherit system;
@@ -78,7 +77,7 @@
         python312Packages.tqdm
         python312Packages.ics
         python312Packages.peewee
-      	python312Packages.openpyxl
+        python312Packages.openpyxl
         python312Packages.pytz
         python312Packages.requests
         python312Packages.pip
@@ -89,6 +88,10 @@
         python312Packages.tkinter
         python312Packages.jupytext
         python312Packages.pycryptodome
+        python312Packages.flask
+        python312Packages.jinja2
+        python312Packages.plotly
+        python312Packages.pandas
         dearpygui
       ];
       shellHook = ''
@@ -97,4 +100,3 @@
     };
   };
 }
-

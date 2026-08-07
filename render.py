@@ -2,6 +2,12 @@ import json
 import math
 import os
 
+# Set matplotlib backend for web rendering
+if os.environ.get("WT_WEB_RENDER") == "1":
+    import matplotlib
+
+    matplotlib.use("Agg")
+
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.animation import FuncAnimation, PillowWriter
@@ -14,7 +20,7 @@ if not os.path.exists(output_dir):
     os.makedirs(output_dir)
 
 # My promo lol
-author_tag = "Author's Twitter: @polo51852166"
+author_tag = "Author's Twitter: @dokkan_wt_info"
 
 
 def calculate_figsize(num_players, max_name_length):
