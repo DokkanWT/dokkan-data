@@ -27,6 +27,11 @@ Once everything is setup you will need to run.
 python main.py
 ```
 
+## Refactoring
+
+The plan to split the fetcher, website and Discord bot into independent
+containerized services is documented in [REFACTOR.md](REFACTOR.md).
+
 ## Contributing
 
 Pull requests are welcome. For major changes, please open an issue first

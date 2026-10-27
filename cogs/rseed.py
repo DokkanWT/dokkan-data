@@ -1,3 +1,4 @@
+import typing
 from datetime import datetime
 
 import discord
@@ -48,6 +49,7 @@ class RandomSeedCommand(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         globals()["bot"] = bot
+
     async def autocompletion_type(
         self, interaction: discord.Interaction, current: str
     ) -> typing.List[app_commands.Choice[str]]:
@@ -56,6 +58,7 @@ class RandomSeedCommand(commands.Cog):
             app_commands.Choice(name="Wins", value="wins"),
         ]
         return choices
+
     @app_commands.command(
         name="rseed",
         description="Show the seed performance of a player relative to a certain amount of resets.",
@@ -165,9 +168,7 @@ async def process_rseed(ctx, player, resets_amount, update, interaction=None):
             await ctx.followup.send(response)
         return
 
-    player_rseed = (
-        player_points[-1] - player_points[-resets_amount - 1]
-    ) / wins_delta
+    player_rseed = (player_points[-1] - player_points[-resets_amount - 1]) / wins_delta
     embed = discord.Embed(
         title=f"Relative seed performance of {player['name']} over the last {resets_amount} resets",
         description=f"{player['name']} has had a seed of {int(player_rseed):_} over the last {resets_amount} resets.",

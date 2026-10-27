@@ -30,7 +30,9 @@ def find_first_fetch_with_players(fetch_dir):
     return None, None
 
 
-def update_data_manual(data_fetch, db_path, region="GLB", start_timestamp=None, is_metadata_start=True):
+def update_data_manual(
+    data_fetch, db_path, region="GLB", start_timestamp=None, is_metadata_start=True
+):
     """
     Update database using fetch data without calling API.
     Uses fetch files to calculate tournament start time.
@@ -66,8 +68,7 @@ def update_data_manual(data_fetch, db_path, region="GLB", start_timestamp=None, 
     cursor = conn.cursor()
 
     # Create tables if they don't exist
-    cursor.execute(
-        """
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS players (
             id INTEGER PRIMARY KEY,
             name TEXT,
@@ -81,11 +82,9 @@ def update_data_manual(data_fetch, db_path, region="GLB", start_timestamp=None, 
             max_points TEXT,
             max_wins TEXT
         )
-    """
-    )
+    """)
 
-    cursor.execute(
-        """
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS borders (
             rank INTEGER PRIMARY KEY,
             wins TEXT,
@@ -97,8 +96,7 @@ def update_data_manual(data_fetch, db_path, region="GLB", start_timestamp=None, 
             max_points TEXT,
             max_wins TEXT
         )
-    """
-    )
+    """)
 
     tracked_ranks = {1, 5, 10, 20, 30, 50, 75, 100, 1000, 2000, 10000}
 
@@ -316,7 +314,7 @@ def update_data_manual(data_fetch, db_path, region="GLB", start_timestamp=None, 
 
 
 # This script updates the data using all the fetch files without calling the API
-region = "JP"
+region = "GLB"
 fetch_dir = f"instances/{region}/fetches"
 
 # Load the correct start timestamp from metadata.json

@@ -36,7 +36,7 @@ class PlayerSelect(discord.ui.Select):
 
         selected_index = int(self.values[0])
         player = self.players[selected_index]
-        
+
         # Process the player and send response
         conn = load_db_data(self.region)
         if self.borders == "1":
@@ -81,7 +81,7 @@ class PlayerSelect(discord.ui.Select):
         else:
             await interaction.response.edit_message(
                 content=f"No data available for points. (either fetch failed and it's a huge skill issue or you're not in the top 10,000 and that's a skill issue as well)",
-                view=None
+                view=None,
             )
 
 
@@ -120,9 +120,16 @@ class PointsCommand(commands.Cog):
         borders="Whether or not you want to see borders on the graph",
         region="Region to query (GLB or JP).",
     )
-    @app_commands.autocomplete(borders=autocomplete_borders, region=autocompletion_region)
+    @app_commands.autocomplete(
+        borders=autocomplete_borders, region=autocompletion_region
+    )
     async def points(
-        self, ctx, identifier: typing.Optional[str] = None, rank: typing.Optional[str] = None, borders: typing.Optional[str] = None, region: str = "GLB"
+        self,
+        ctx,
+        identifier: typing.Optional[str] = None,
+        rank: typing.Optional[str] = None,
+        borders: typing.Optional[str] = None,
+        region: str = "GLB",
     ):
         try:
             await ctx.response.defer()
@@ -161,9 +168,7 @@ class PointsCommand(commands.Cog):
                     )
                     return
 
-                view = PlayerSelectView(
-                    players, ctx, update, borders, region
-                )
+                view = PlayerSelectView(players, ctx, update, borders, region)
                 await ctx.followup.send(
                     "Multiple players found. Please select one:", view=view
                 )
@@ -176,7 +181,9 @@ class PointsCommand(commands.Cog):
             self.bot.log_message(f"An error occurred: {e}")
             await ctx.followup.send("Me no worki lol ask Polo (@polowiper) 2 fix plz")
 
-    async def process_player(self, ctx, player, update, borders=None, region: str = "GLB"):
+    async def process_player(
+        self, ctx, player, update, borders=None, region: str = "GLB"
+    ):
         conn = load_db_data(region)
         if borders == "1":
             borders = find_borders(conn, 100)

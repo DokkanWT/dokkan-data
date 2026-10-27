@@ -72,6 +72,7 @@
       packages = with pkgs; [
         python312
         frida-tools
+        docker
         python312Packages.frida-python
         python312Packages.matplotlib
         python312Packages.tqdm

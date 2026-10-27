@@ -22,18 +22,60 @@ output_dir = os.path.join(BASE_DIR, "../top100_data")
 if not os.path.exists(output_dir):
     os.makedirs(output_dir)
 
+def get_older_cfg(region="GLB", edition=None):
+    """Path of the archived editions for a region (or of one edition).
 
-def load_db_data(region="GLB"):
+    Layout: ``<OLDER_EDITIONS_PATH>/<edition>/`` containing ``<edition>.db``
+    as well as the edition's ``metadata.json``/``first.json``/``latest.json``.
+    """
     region_cfg = get_region_config(region)
-    path = region_cfg["DB_PATH"]
-    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    base_path = region_cfg.get("OLDER_EDITIONS_PATH")
+    if not base_path:
+        # Fallback for configs that predate the OLDER_EDITIONS_PATH key
+        base_path = os.path.join(
+            BASE_DIR, "..", "older_editions", str(region).upper()
+        )
+    base_path = os.path.expanduser(base_path)
+    if edition in (None, ""):
+        return base_path
+    return os.path.join(base_path, str(int(edition)))
+
+
+def get_older_db_path(region="GLB", edition=0):
+    edition = int(edition)
+    return os.path.join(get_older_cfg(region, edition), f"{edition}.db")
+
+
+def load_db_data(region="GLB", edition=0):
+    """Open a tournament database read-only.
+
+    ``edition=0`` (default) opens the live database from ``DB_PATH``.
+    Any other value opens the archived database of that edition, located at
+    ``<OLDER_EDITIONS_PATH>/<edition>/<edition>.db``.
+    """
+    region_cfg = get_region_config(region)
+    if edition:
+        path = get_older_db_path(region, edition)
+    else:
+        path = region_cfg["DB_PATH"]
+
     print(f"Trying to look at {path}")
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            f"No database found for {str(region).upper()} edition "
+            f"{edition or 'current'}: {path}"
+        )
+    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     return conn
 
 
-def find_rank(conn, rank, region="GLB"):
+def find_rank(conn, rank, region="GLB", edition=0):
     cursor = conn.cursor()
-    update, start, end, total, left, elapsed = time_data(region=region)
+    update, start, end, total, left, elapsed = time_data(
+        edition_dir=edition or None, region=region
+    )
+    if elapsed is None:
+        return None
     elapsed_hours = round(elapsed.total_seconds() / 3600, 2)
     conn.create_function("strrev", 1, lambda s: s[::-1])
     cursor.execute(
@@ -219,12 +261,7 @@ def save_discord_users(discord_users):
 def latest_fetch(edition_dir=None, region="GLB"):
     region_cfg = get_region_config(region)
     if edition_dir:
-        output_dir = os.path.join(
-            BASE_DIR,
-            "../older_editions",
-            region.upper(),
-            str(edition_dir),
-        )
+        output_dir = get_older_cfg(region, edition_dir)
         latest_file = os.path.join(output_dir, f"latest.json")
         return latest_file if os.path.exists(latest_file) else None
     else:
@@ -243,12 +280,7 @@ def first_fetch(edition_dir=None, region="GLB"):
     region_cfg = get_region_config(region)
     if edition_dir:
         # For older editions, look for the first.json file directly
-        output_dir = os.path.join(
-            BASE_DIR,
-            "../older_editions",
-            region.upper(),
-            str(edition_dir),
-        )
+        output_dir = get_older_cfg(region, edition_dir)
         # Prefer metadata.json for older editions (created by fetch_and_save)
         metadata_path = os.path.join(output_dir, "metadata.json")
         return metadata_path if os.path.exists(metadata_path) else None
@@ -287,7 +319,7 @@ def find_best(player_id, region="GLB"):
         dict: Player data from the edition with highest latest points, or None if not found
     """
     region = region.upper()
-    older_editions_path = os.path.join(BASE_DIR, "../older_editions", region)
+    older_editions_path = get_older_cfg(region)
     
     if not os.path.exists(older_editions_path):
         return None
@@ -346,7 +378,7 @@ def time_data(update_only=True, tournament_over=False, edition_dir=None, region=
         if edition_dir:
             # Look for older edition metadata file
             metadata_path = os.path.join(
-                BASE_DIR, "../older_editions", region.upper(), str(edition_dir), "metadata.json"
+                get_older_cfg(region, edition_dir), "metadata.json"
             )
             if not os.path.exists(metadata_path):
                 # No metadata for older edition

@@ -112,6 +112,7 @@ class PaceCommand(commands.Cog):
         pace_type="The pace type you want to see. Either 'wins' or 'points'.",
         identifier="The identifier of the player you want to see the pace of.",
         rank="If you wish to search the pace of a player with its rank instead of its name",
+        edition="Specify the edition you want (0 = current edition)",
         borders="Whether or not you wish to see the border on your graph",
         region="Region to query (GLB or JP).",
     )
@@ -124,6 +125,7 @@ class PaceCommand(commands.Cog):
         pace_type: str = "wins",
         identifier: str = None,
         rank: str = None,
+        edition: int = 0,
         borders: str = None,
         region: str = "GLB",
     ):
@@ -137,9 +139,17 @@ class PaceCommand(commands.Cog):
                 return
 
             region = (region or "GLB").upper()
-            conn = load_db_data(region)
+            try:
+                conn = load_db_data(region, edition)
+            except FileNotFoundError:
+                await ctx.followup.send(
+                    f"No data found for edition {edition} in {region}."
+                )
+                return
             discord_users = load_discord_users()
-            update, start, end, total, left, elapsed = time_data(region=region)
+            update, start, end, total, left, elapsed = time_data(
+                edition_dir=edition or None, region=region
+            )
             if update is None:
                 update = datetime.fromisoformat("2005-03-30")
                 update = datetime.combine(update, datetime.min.time())
@@ -154,7 +164,7 @@ class PaceCommand(commands.Cog):
                         )
                         return
                 else:
-                    identifier = find_rank(conn, rank, region)
+                    identifier = find_rank(conn, rank, region, edition)
             print(f"Identifier: {identifier}")
             players = find_player(conn, identifier)
             if borders == "1":
@@ -225,7 +235,7 @@ class PaceCommand(commands.Cog):
             else:
                 await ctx.followup.send(f"No data available for {pace_type}.")
         except Exception as e:
-            bot.self.log_message(f"An error occurred: {e}")
+            self.bot.log_message(f"An error occurred: {e}")
             await ctx.followup.send("Me no worki lol ask Polo (@polowiper) 2 fix plz")
 
 
