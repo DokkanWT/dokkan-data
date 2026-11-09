@@ -9,3 +9,7 @@ database.db
 config.py.local
 instances/
 older_editions/
+
+# devenv
+.devenv/
+devenv.local.nix

@@ -9,6 +9,19 @@ Add buttons to change page on the leaderboard command
 
 
 
+Stop writing graphs to top100_data/<player>/ and keep them in memory instead
+Matplotlib can save a fig straight into a BytesIO (fig.savefig(buf, format="png", bbox_inches="tight"))
+and discord.File accepts that buffer, so no path = no collision between current/archived editions
+and no more \$ escaping mismatch between render() and PlayerSelect
+Measured: ~30KB and 0.2s per graph, so a small LRU+TTL cache of the bytes is cheap
+Cache key: region, edition, player id, graph type, borders, + the edition's update timestamp
+(the update timestamp invalidates it automatically on a new fetch, old editions never change)
+Careful: animate=True is the exception, Animation.save() needs a real path (BytesIO raises TypeError),
+so use a TemporaryDirectory (or build the GIF from PNG frames with Pillow) for those
+Also matplotlib pyplot isn't thread safe, if rendering ever moves off the event loop use Figure+FigureCanvasAgg
+
+
+
 FOR THE WEBSITE :
 
 
